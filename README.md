@@ -1,2 +1,10 @@
 # MAE-keras
-Unofficial keras(tensorflow) implementation of MAE model from Masked Autoencoders Are Scalable Vision Learners 
+Unofficial keras(tensorflow) implementation of MAE model described in 'Masked Autoencoders Are Scalable Vision Learners'.
+This work has been done on the basis of https://keras.io/examples/vision/image_classification_with_vision_transformer/,
+                                        https://www.tensorflow.org/text/tutorials/transformer#positional_encoding,
+                                        https://keras.io/examples/vision/image_classification_with_vision_transformer/
+
+It is not complete, flawless implementation, so its performance could be different from the paper.
+If there is anything to modify, please make it right :) Thanks.
+
+Contact on my bio: ga06033@yonsei.ac.kr
