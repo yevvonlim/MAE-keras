@@ -6,7 +6,7 @@ import numpy as np
 
 # Patch Embedding--------------------------
 # https://keras.io/examples/vision/image_classification_with_vision_transformer/
-
+@tf.keras.utils.register_keras_serializable()
 class Patches(layers.Layer):
     def __init__(self, patch_size):
         super(Patches, self).__init__()
@@ -25,8 +25,18 @@ class Patches(layers.Layer):
         patches = tf.reshape(patches, [batch_size, -1, patch_dims])
         return patches
 
+    def get_config(self):
+        config = super().get_config()
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+    
+
 
 # Random Sampling-------------------------
+@tf.keras.utils.register_keras_serializable()
 class RandomSampling(layers.Layer):    
     def __init__(self, num_patches, mask_ratio=0.75):
         super(RandomSampling, self).__init__()
@@ -46,6 +56,14 @@ class RandomSampling(layers.Layer):
                             replace=False)
         self.un_masked_indices = np.delete(np.array(range(self.num_patches)), self.mask_indices)
         return tf.gather(patches, self.un_masked_indices, axis=1)
+
+    def get_config(self):
+        config = super().get_config()
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 # Mask Token---------------------------------------------------
@@ -97,6 +115,7 @@ class MaskToken(layers.Layer):
         return cls(**config)
 
 # Patches to image layer--------------------
+@tf.keras.utils.register_keras_serializable()
 class PatchesToImage(layers.Layer):
     def __init__(self, img_h, img_w, img_c, patch_size, **kwargs):
         super(PatchesToImage, self).__init__(**kwargs)
@@ -125,7 +144,13 @@ class PatchesToImage(layers.Layer):
         img = tf.concat(rows, axis=1)
 
         return img
+    def get_config(self):
+        config = super().get_config()
+        return config
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 # Positional Encoding---------------------------------------
 # https://www.tensorflow.org/text/tutorials/transformer#positional_encoding
 
@@ -152,7 +177,7 @@ def pos_encode(pos, d_model):
 # Patch Encoder--------------------------
 # https://keras.io/examples/vision/image_classification_with_vision_transformer/
 # edited positional encoding part 
-
+@tf.keras.utils.register_keras_serializable()
 class PatchEncoder(layers.Layer):
     def __init__(self, num_patches, projection_dim):
         super(PatchEncoder, self).__init__()
@@ -165,7 +190,15 @@ class PatchEncoder(layers.Layer):
     def call(self, patch):
         encoded = self.projection(patch) + self.position_embedding
         return encoded
+        
+    def get_config(self):
+        config = super().get_config()
+        return config
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+    
 
 # Transformer Block--------------------------------------
 # https://github.com/faustomorales/vit-keras/blob/master/vit_keras/layers.py
