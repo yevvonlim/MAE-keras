@@ -34,5 +34,5 @@ def mae_model(input_shape, img_h, img_w, patch_size=40, d_model=32, dff=128, num
     model = Model(inputs=input, outputs=x)
     return model
 
-model = mae_model((1200, 800, 3), img_h=800, img_w=1200, d_model=768, dff=3072, N_e=12, N_d=1, num_heads=12)
+model = mae_model((800, 1200, 3), img_h=800, img_w=1200, d_model=768, dff=3072, N_e=12, N_d=1, num_heads=12)
 model.summary()
