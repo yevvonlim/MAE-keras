@@ -96,6 +96,35 @@ class MaskToken(layers.Layer):
     def from_config(cls, config):
         return cls(**config)
 
+# Patches to image layer--------------------
+class PatchesToImage(layers.Layer):
+    def __init__(self, img_h, img_w, img_c, patch_size, **kwargs):
+        super(PatchesToImage, self).__init__(**kwargs)
+        self.H = img_h
+        self.W = img_w
+        self.C = img_c
+        self.patch_size = patch_size
+        self.n_patch = (self.W * self.H) // (self.patch_size * self.patch_size)
+        # assume that the image could be divided into patches without overlapping or padding
+
+    def call(self, inputs):
+        patches = [tf.reshape(tensor, (-1, self.patch_size, self.patch_size, self.C)) \
+                  for tensor in tf.split(inputs, num_or_size_splits=inputs.shape[1], axis=1)]
+
+        # n_row, n_col should be interger
+        n_row = self.H // self.patch_size
+        n_col = self.W // self.patch_size
+
+        rows = []
+        for row in range(n_row):
+            cols = []
+            for col in range(n_col):
+                cols.append(patches[row*n_col + col])
+            col_t = tf.concat(cols, axis=2)  
+            rows.append(col_t)
+        img = tf.concat(rows, axis=1)
+
+        return img
 
 # Positional Encoding---------------------------------------
 # https://www.tensorflow.org/text/tutorials/transformer#positional_encoding
