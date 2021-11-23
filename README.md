@@ -4,6 +4,7 @@ This work has been done on the basis of https://keras.io/examples/vision/image_c
                                         https://www.tensorflow.org/text/tutorials/transformer#positional_encoding,
                                         https://keras.io/examples/vision/image_classification_with_vision_transformer/
 
+Currently, only pre-training model is supported. But you can easily fine-tune the model using its encoder part. 
 It is not complete, flawless implementation, so its performance could be different from the paper.
 If there is anything to modify, please make it right :) Thanks.
 
