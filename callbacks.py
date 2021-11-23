@@ -41,5 +41,3 @@ class ReconstructImage(keras.callbacks.Callback):
         writer.close()
 
         return
-
-tbi_callback = ReconstructImage('Reconstructed Image')
