@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 import numpy as np
+from tensorflow.python.keras.backend import dtype
 
 
 
@@ -8,8 +9,8 @@ import numpy as np
 # https://keras.io/examples/vision/image_classification_with_vision_transformer/
 @tf.keras.utils.register_keras_serializable()
 class Patches(layers.Layer):
-    def __init__(self, patch_size):
-        super(Patches, self).__init__()
+    def __init__(self, patch_size, *args, **kwargs):
+        super(Patches, self).__init__(*args, **kwargs)
         self.patch_size = patch_size
 
     def call(self, images):
@@ -26,7 +27,7 @@ class Patches(layers.Layer):
         return patches
 
     def get_config(self):
-        config = super().get_config()
+        config = {"patch_size":self.patch_size}
         return config
 
     @classmethod
@@ -38,8 +39,8 @@ class Patches(layers.Layer):
 # Random Sampling-------------------------
 @tf.keras.utils.register_keras_serializable()
 class RandomSampling(layers.Layer):    
-    def __init__(self, num_patches, mask_ratio=0.75):
-        super(RandomSampling, self).__init__()
+    def __init__(self, num_patches, mask_ratio=0.75, *args, **kwargs):
+        super(RandomSampling, self).__init__(*args, **kwargs)
         self.num_patches = num_patches
         self.mask_ratio = mask_ratio
 
@@ -50,15 +51,16 @@ class RandomSampling(layers.Layer):
     def call(self, patches):
         """
             returns:
-                unmasked patches, [mask indices, unmasked indices]
+                unmasked patches
         """
         self.mask_indices = np.random.choice(self.num_patches, size=self.num_mask,
                             replace=False)
         self.un_masked_indices = np.delete(np.array(range(self.num_patches)), self.mask_indices)
-        return tf.gather(patches, self.un_masked_indices, axis=1)
+        return tf.cast(tf.gather(patches, self.un_masked_indices, axis=1), dtype=tf.float16)
 
     def get_config(self):
-        config = super().get_config()
+        config = {"num_patches":self.num_patches,
+                  "mask_ratio":self.mask_ratio}
         return config
 
     @classmethod
@@ -70,17 +72,16 @@ class RandomSampling(layers.Layer):
 @tf.keras.utils.register_keras_serializable()
 class MaskToken(layers.Layer):
     """Append a mask token to encoder output."""
-    def __init__(self, mask_indices, un_masked_indices):
-        super(MaskToken, self).__init__()
-        self.mask_indices = np.array([index for index in mask_indices])
-        self.un_masked_indices = np.array([index for index in un_masked_indices])
+    def __init__(self, *args, **kwargs):
+        super(MaskToken, self).__init__(*args, **kwargs)
+        self.mask_indices = None
+        self.un_masked_indices = None
         self.indices = None
 
 
     def build(self, input_shape):
         mst_init = tf.zeros_initializer()
         self.hidden_size = input_shape[-1]
-        out_init = tf.zeros_initializer()
         self.mst = tf.Variable(
             name="mst",
             initial_value=mst_init(shape=(1, 1, self.hidden_size), dtype="float32"),
@@ -88,7 +89,10 @@ class MaskToken(layers.Layer):
         )
         
 
-    def call(self, inputs):
+    def call(self, inputs, mask_indices, un_masked_indices):
+        self.mask_indices = np.array([index for index in mask_indices])
+        self.un_masked_indices = np.array([index for index in un_masked_indices])
+        
         batch_size = tf.shape(inputs)[0]
         # num_patches = self.mask_indices.shape[0] + self.un_masked_indices.shape[0]
         mask_num = self.mask_indices.shape[0]
@@ -117,8 +121,8 @@ class MaskToken(layers.Layer):
 # Patches to image layer--------------------
 @tf.keras.utils.register_keras_serializable()
 class PatchesToImage(layers.Layer):
-    def __init__(self, img_h, img_w, img_c, patch_size, **kwargs):
-        super(PatchesToImage, self).__init__(**kwargs)
+    def __init__(self, img_h, img_w, img_c, patch_size, *args, **kwargs):
+        super(PatchesToImage, self).__init__(*args, **kwargs)
         self.H = img_h
         self.W = img_w
         self.C = img_c
@@ -145,11 +149,15 @@ class PatchesToImage(layers.Layer):
 
         return img
     def get_config(self):
-        config = super().get_config()
+        config = {"img_h":self.H,
+                  "img_w":self.W,
+                  "img_c":self.C,
+                  "patch_size":self.patch_size}
         return config
 
     @classmethod
     def from_config(cls, config):
+      # temp
         return cls(**config)
 # Positional Encoding---------------------------------------
 # https://www.tensorflow.org/text/tutorials/transformer#positional_encoding
@@ -179,9 +187,10 @@ def pos_encode(pos, d_model):
 # edited positional encoding part 
 @tf.keras.utils.register_keras_serializable()
 class PatchEncoder(layers.Layer):
-    def __init__(self, num_patches, projection_dim):
-        super(PatchEncoder, self).__init__()
+    def __init__(self, num_patches, projection_dim, *args, **kwargs):
+        super(PatchEncoder, self).__init__(*args, **kwargs)
         self.num_patches = num_patches
+        self.projection_dim = projection_dim
         self.projection = layers.Dense(units=projection_dim)
         self.position_embedding = pos_encode(
             pos=num_patches, d_model=projection_dim
@@ -192,11 +201,13 @@ class PatchEncoder(layers.Layer):
         return encoded
         
     def get_config(self):
-        config = super().get_config()
+        config ={"num_patches":self.num_patches,
+                 "projection_dim":self.projection_dim}
         return config
 
     @classmethod
     def from_config(cls, config):
+      # temp
         return cls(**config)
     
 
@@ -217,7 +228,8 @@ class TransformerBlock(layers.Layer):
         self.att = layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=input_shape[-1] // self.num_heads,  #input_shape[-1] = d_model
-            name="MultiHeadDotProductAttention_1",
+            name="MultiHeadDotProductAttention_1", 
+            dtype=tf.float16
         )
         self.mlpblock = tf.keras.Sequential(
             [
@@ -225,23 +237,25 @@ class TransformerBlock(layers.Layer):
                     self.mlp_dim,
                     activation="linear",
                     name=f"{self.name}/Dense_0",
+                    dtype=tf.float16
                 ),
                 tf.keras.layers.Lambda(
-                    lambda x: tf.keras.activations.gelu(x, approximate=False)
+                    lambda x: tf.keras.activations.gelu(x, approximate=False),
+                    dtype=tf.float16
                 ),
-                tf.keras.layers.Dropout(self.dropout),
-                tf.keras.layers.Dense(input_shape[-1], name=f"{self.name}/Dense_1"),
-                tf.keras.layers.Dropout(self.dropout),
+                tf.keras.layers.Dropout(self.dropout, dtype=tf.float16),
+                tf.keras.layers.Dense(input_shape[-1], name=f"{self.name}/Dense_1", dtype=tf.float16),
+                tf.keras.layers.Dropout(self.dropout, dtype=tf.float16),
             ],
             name="MlpBlock_3",
         )
         self.layernorm1 = tf.keras.layers.LayerNormalization(
-            epsilon=1e-6, name="LayerNorm_0"
+            epsilon=1e-6, name="LayerNorm_0", dtype=tf.float16
         )
         self.layernorm2 = tf.keras.layers.LayerNormalization(
-            epsilon=1e-6, name="LayerNorm_2"
+            epsilon=1e-6, name="LayerNorm_2", dtype=tf.float16
         )
-        self.dropout_layer = tf.keras.layers.Dropout(self.dropout)
+        self.dropout_layer = tf.keras.layers.Dropout(self.dropout, dtype=tf.float16)
 
     def call(self, inputs, training):
         x = self.att(inputs, inputs)
