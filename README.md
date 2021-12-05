@@ -8,4 +8,14 @@ Currently, only pre-training model is supported. But you can easily fine-tune th
 It is not complete, flawless implementation, so its performance could be different from the paper.
 If there is anything to modify, please make it right :) Thanks.
 
+✔️ Supported (DONE)  
+▫️ Sinusoidal positional encoding at both encoder and decoder inputs  
+▫️ (Random)Mask Token, Patch, PatchesToImages Layer  
+▫️ ImageReconstruction callback  
+
+
+✖️ Not Supported yet (TO DO)  
+▫️ Pre-trained model  
+▫️ Model test  
+
 Contact on my bio: ga06033@yonsei.ac.kr
