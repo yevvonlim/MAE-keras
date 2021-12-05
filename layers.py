@@ -1,8 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 import numpy as np
-from tensorflow.python.keras.backend import dtype
-
 
 
 # Patch Embedding--------------------------
@@ -48,6 +46,10 @@ class RandomSampling(layers.Layer):
         self.un_masked_indices = None
         self.mask_indices = None
 
+
+    def get_indices(self):
+        return [self.mask_indices, self.un_masked_indices]
+
     def call(self, patches):
         """
             returns:
@@ -56,7 +58,8 @@ class RandomSampling(layers.Layer):
         self.mask_indices = np.random.choice(self.num_patches, size=self.num_mask,
                             replace=False)
         self.un_masked_indices = np.delete(np.array(range(self.num_patches)), self.mask_indices)
-        return tf.cast(tf.gather(patches, self.un_masked_indices, axis=1), dtype=tf.float16)
+
+        return tf.gather(patches, self.un_masked_indices, axis=1), self.mask_indices, self.un_masked_indices
 
     def get_config(self):
         config = {"num_patches":self.num_patches,
@@ -77,24 +80,25 @@ class MaskToken(layers.Layer):
         self.mask_indices = None
         self.un_masked_indices = None
         self.indices = None
-
+        self.mst = None
+        self.hidden_size = None
 
     def build(self, input_shape):
-        mst_init = tf.zeros_initializer()
         self.hidden_size = input_shape[-1]
         self.mst = tf.Variable(
             name="mst",
-            initial_value=mst_init(shape=(1, 1, self.hidden_size), dtype="float32"),
-            trainable=True,
+            initial_value = tf.random.normal(
+                shape=(1, 1, self.hidden_size), dtype='float32'), 
+            trainable=True
         )
         
 
     def call(self, inputs, mask_indices, un_masked_indices):
-        self.mask_indices = np.array([index for index in mask_indices])
-        self.un_masked_indices = np.array([index for index in un_masked_indices])
+        self.mask_indices = mask_indices
+        self.un_masked_indices = un_masked_indices
+     
         
         batch_size = tf.shape(inputs)[0]
-        # num_patches = self.mask_indices.shape[0] + self.un_masked_indices.shape[0]
         mask_num = self.mask_indices.shape[0]
         
         # broadcast mask token for batch
@@ -104,7 +108,7 @@ class MaskToken(layers.Layer):
                         )
         
         # concat
-        self.indices = np.concatenate([self.mask_indices, self.un_masked_indices], axis=0)
+        self.indices = tf.concat([self.mask_indices, self.un_masked_indices], axis=0)
         updates = tf.concat([mst_broadcasted, inputs], axis=1)
                        
         out = tf.gather(updates, self.indices, axis=1, batch_dims=0)
@@ -229,7 +233,7 @@ class TransformerBlock(layers.Layer):
             num_heads=self.num_heads,
             key_dim=input_shape[-1] // self.num_heads,  #input_shape[-1] = d_model
             name="MultiHeadDotProductAttention_1", 
-            dtype=tf.float16
+          
         )
         self.mlpblock = tf.keras.Sequential(
             [
@@ -237,25 +241,25 @@ class TransformerBlock(layers.Layer):
                     self.mlp_dim,
                     activation="linear",
                     name=f"{self.name}/Dense_0",
-                    dtype=tf.float16
+                    
                 ),
                 tf.keras.layers.Lambda(
                     lambda x: tf.keras.activations.gelu(x, approximate=False),
-                    dtype=tf.float16
+                  
                 ),
-                tf.keras.layers.Dropout(self.dropout, dtype=tf.float16),
-                tf.keras.layers.Dense(input_shape[-1], name=f"{self.name}/Dense_1", dtype=tf.float16),
-                tf.keras.layers.Dropout(self.dropout, dtype=tf.float16),
+                tf.keras.layers.Dropout(self.dropout),
+                tf.keras.layers.Dense(input_shape[-1], name=f"{self.name}/Dense_1"),
+                tf.keras.layers.Dropout(self.dropout),
             ],
             name="MlpBlock_3",
         )
         self.layernorm1 = tf.keras.layers.LayerNormalization(
-            epsilon=1e-6, name="LayerNorm_0", dtype=tf.float16
+            epsilon=1e-6, name="LayerNorm_0"
         )
         self.layernorm2 = tf.keras.layers.LayerNormalization(
-            epsilon=1e-6, name="LayerNorm_2", dtype=tf.float16
+            epsilon=1e-6, name="LayerNorm_2"
         )
-        self.dropout_layer = tf.keras.layers.Dropout(self.dropout, dtype=tf.float16)
+        self.dropout_layer = tf.keras.layers.Dropout(self.dropout)
 
     def call(self, inputs, training):
         x = self.att(inputs, inputs)
